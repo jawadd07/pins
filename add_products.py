@@ -3,7 +3,7 @@
   python add_products.py                 add from keywords.txt  (category | keyword [| amazon product url or ASIN])
   python add_products.py --ideas         add ideas from Gemini free key (GEMINI_API_KEY)
   python add_products.py --setlinks links.txt   set exact product links:  product name | amazon url or ASIN"""
-import argparse, csv, json, os, re, shutil
+import argparse, csv, json, os, re, shutil, webbrowser
 from urllib.parse import quote_plus
 import requests, yaml
 
@@ -12,7 +12,7 @@ COLS = ["name", "affiliate_url", "network", "category", "board", "keywords", "de
 
 
 def clean(s):
-    return re.sub(r"\s+", " ", str(s).replace(",", " ").replace(";", " ")).strip()
+    return re.sub(r"\s+", " ", str(s).replace(",", " ").replace(";", " ").replace('"', "")).strip()
 
 
 def read_rows():
@@ -87,28 +87,109 @@ def from_gemini(cfg, cats, n):
     return out
 
 
+def short_name(title):
+    t = re.split(r"[,|(:\u2013\u2014]| - ", title)[0]
+    words = clean(t).split()
+    return " ".join(words[:7]).title() or clean(title)[:50].title()
+
+
+def big_image(url):
+    return re.sub(r"\._[^/]*_\.(jpg|png)$", r"._AC_SL1000_.\1", url) if "media-amazon" in url else url
+
+
+def import_picks(path, rows, tag, cfg, limit):
+    """picks.txt lines from the bookmarklet:  category | title | amazon url | image url   (skips ASINs already in products.csv)"""
+    txt = open(path, encoding="utf-8").read().replace(" ## ", "\n")
+    have_names = {r["name"].lower() for r in rows}
+    have_asin = set(re.findall(r"/dp/([A-Z0-9]{10})", " ".join(r["affiliate_url"] for r in rows)))
+    use_img = bool(cfg.get("use_amazon_images", False))
+    new = []
+    for ln in txt.splitlines():
+        parts = [x.strip() for x in ln.split("|")]
+        if len(parts) < 3 or parts[0].startswith("#"):
+            continue
+        cat, title, link = parts[0], parts[1], parts[2]
+        img = parts[3] if len(parts) > 3 else ""
+        if cat not in cfg.get("boards", {}):
+            print("skip (category not in config boards):", cat)
+            continue
+        url = product_link(link, tag)
+        m = re.search(r"/dp/([A-Z0-9]{10})", url or "")
+        if not url or not m or m.group(1) in have_asin:
+            continue
+        name = short_name(title)
+        if name.lower() in have_names:
+            name = f"{name} {m.group(1)[-4:]}"
+        r = make_row(cat, name, tag, url)
+        r["name"] = name
+        short_kw = " ".join(name.lower().split()[-2:])  # e.g. "papasan chair": broader photo search
+        r["keywords"] = ";".join(dict.fromkeys([short_kw, name.lower(), cat.replace("-", " ")]))
+        r["description"] = f"{name} is a popular pick with great reviews"[:120]
+        r["image_url"] = big_image(img) if (use_img and img) else ""
+        have_asin.add(m.group(1))
+        have_names.add(name.lower())
+        new.append(r)
+        if len(new) >= limit:
+            break
+    return new
+
+
+def sync_links_file(path, rows):
+    """make sure every product has a line in links.txt"""
+    have = set()
+    if os.path.exists(path):
+        for ln in open(path, encoding="utf-8"):
+            if ln.strip() and not ln.startswith("#") and "|" in ln:
+                have.add(ln.split("|")[0].strip().lower())
+    missing = [r["name"] for r in rows if r["name"].lower() not in have]
+    if missing:
+        with open(path, "a", encoding="utf-8") as f:
+            for n in missing:
+                f.write(f"{n} | PASTE LINK HERE\n")
+    return len(missing)
+
+
+def open_searches(path, limit):
+    """open Amazon search tabs (sorted by reviews, no tag) for products still waiting for a link"""
+    todo = []
+    for ln in open(path, encoding="utf-8"):
+        if ln.strip() and not ln.startswith("#") and "|" in ln:
+            parts = [x.strip() for x in ln.split("|")]
+            if len(parts) < 2 or "PASTE" in parts[1].upper() or not parts[1]:
+                todo.append(parts[0])
+    for n in todo[:limit]:
+        webbrowser.open(f"https://www.amazon.com/s?k={quote_plus(n)}&s=review-rank")
+    print(f"opened {min(len(todo), limit)} tabs, {max(0, len(todo) - limit)} products still waiting")
+    return todo
+
+
 def set_links(path, rows, tag):
+    """line:  product name | amazon url or ASIN | optional exact photo url"""
     byname = {r["name"].lower(): r for r in rows}
     n = 0
     for ln in open(path, encoding="utf-8"):
         ln = ln.strip()
         if not ln or ln.startswith("#") or "|" not in ln:
             continue
-        name, _, link = [x.strip() for x in ln.partition("|")]
-        if not link or "PASTE" in link.upper():
-            continue
-        url = product_link(link, tag)
-        if not url:
-            print("bad link, skipped:", name)
-            continue
+        parts = [x.strip() for x in ln.split("|")]
+        name, link = parts[0], parts[1]
+        photo = parts[2] if len(parts) > 2 else ""
         r = byname.get(name.lower())
         if not r:
             print("name not in products.csv:", name)
             continue
-        if r["affiliate_url"] != url:
-            r["affiliate_url"] = url
+        if link and "PASTE" not in link.upper():
+            url = product_link(link, tag)
+            if not url:
+                print("bad link, skipped:", name)
+            elif r["affiliate_url"] != url:
+                r["affiliate_url"] = url
+                n += 1
+                print("link set:", name)
+        if photo.startswith("http") and r.get("image_url") != photo:
+            r["image_url"] = photo
             n += 1
-            print("link set:", name)
+            print("photo set:", name)
     return n
 
 
@@ -117,6 +198,8 @@ if __name__ == "__main__":
     ap.add_argument("--ideas", action="store_true")
     ap.add_argument("--file", default="keywords.txt")
     ap.add_argument("--setlinks", metavar="FILE")
+    ap.add_argument("--import", dest="imp", metavar="FILE", help="import picks.txt made by the bookmarklet")
+    ap.add_argument("--openlinks", action="store_true", help="open Amazon search tabs for products without exact link")
     ap.add_argument("--max", type=int, default=5)
     ap.add_argument("--config", default="config.yaml")
     a = ap.parse_args()
@@ -125,6 +208,28 @@ if __name__ == "__main__":
     tag = find_tag(rows, cfg)
     if not tag:
         raise SystemExit("no Amazon tag found. add amazon_tag: yourtag-20 to config.yaml")
+    if a.imp:
+        if not os.path.exists(a.imp) or not open(a.imp, encoding="utf-8").read().strip():
+            print("picks.txt empty, nothing to import")
+            raise SystemExit
+        new = import_picks(a.imp, rows, tag, cfg, a.max)
+        if new:
+            shutil.copy(CSV, CSV + ".bak")
+            with open(CSV, "a", newline="", encoding="utf-8") as f:
+                w = csv.DictWriter(f, fieldnames=COLS)
+                for r in new:
+                    w.writerow(r)
+            with open("picks_done.txt", "a", encoding="utf-8") as f:
+                f.write(open(a.imp, encoding="utf-8").read() + "\n")
+            open(a.imp, "w", encoding="utf-8").close()
+            print("imported", len(new), "products:", ", ".join(r["name"] for r in new))
+        else:
+            print("no new products in picks.txt")
+        raise SystemExit
+    if a.openlinks:
+        sync_links_file("links.txt", rows)
+        open_searches("links.txt", 5)
+        raise SystemExit
     if a.setlinks:
         if set_links(a.setlinks, rows, tag):
             write_rows(rows)
@@ -155,3 +260,4 @@ if __name__ == "__main__":
             for r in new:
                 w.writerow(r)
         print("added", len(new), "products:", ", ".join(r["name"] for r in new))
+        sync_links_file("links.txt", read_rows())

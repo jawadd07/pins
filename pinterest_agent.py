@@ -7,6 +7,7 @@ import requests, yaml
 from PIL import Image, ImageDraw, ImageFont
 
 CFG, OUT = {}, Path("site")
+EXACT = {"on": False}
 
 
 def slugify(s):
@@ -85,6 +86,15 @@ def fetch(url, path):
 
 def gen_base(p, v, tmp, dry):
     prov = CFG["image"]["provider"]
+    EXACT["on"] = False
+    if p.get("image_url") and not dry:  # exact product photo wins
+        try:
+            fetch(p["image_url"], tmp)
+            Image.open(tmp).verify()
+            EXACT["on"] = True
+            return
+        except Exception as e:
+            print("  image_url failed, using", prov, "|", str(e)[:60])
     if dry:
         Image.new("RGB", (1000, 1500), (random.randint(40, 200),) * 3).save(tmp)
     elif prov == "fal":
@@ -95,12 +105,19 @@ def gen_base(p, v, tmp, dry):
         fetch(r.json()["images"][0]["url"], tmp)
     elif prov == "pexels":  # free real photos, free key: pexels.com/api
         key = os.environ["PEXELS_API_KEY"]
-        q = (p.get("keywords", "").split(";")[0] or p["name"]).strip()
+        kw0 = (p.get("keywords", "").split(";")[0] or p["name"]).strip()
+        q = p.get("photo_query") or p["name"]
         used = set(open("used_photos.txt").read().split()) if os.path.exists("used_photos.txt") else set()
         r = requests.get("https://api.pexels.com/v1/search", headers={"Authorization": key},
                          params={"query": q, "orientation": "portrait", "per_page": 30}, timeout=60)
         r.raise_for_status()
         allp = r.json().get("photos", [])
+        if len(allp) < 5:  # product name too specific -> fall back to first keyword
+            r = requests.get("https://api.pexels.com/v1/search", headers={"Authorization": key},
+                             params={"query": kw0, "orientation": "portrait", "per_page": 30}, timeout=60)
+            r.raise_for_status()
+            allp = r.json().get("photos", [])
+            q = kw0
         photos = [x for x in allp if str(x["id"]) not in used] or allp
         if not photos:
             raise RuntimeError("no pexels photo for " + q)
@@ -190,9 +207,44 @@ def draw_design(p, v, tmp):
     im.save(tmp)
 
 
+def compose_product(tmp, v, out):
+    """exact product photo on a designed pin: 6 palettes x 3 layouts, so 8 pins of one photo look different"""
+    photo = Image.open(tmp).convert("RGB")
+    rnd = random.Random(sum(map(ord, out.name)))
+    top, bot, tc, ac = PALETTES[rnd.randrange(len(PALETTES))]
+    im = Image.new("RGB", (1000, 1500))
+    d = ImageDraw.Draw(im, "RGBA")
+    for y in range(1500):
+        t = y / 1499
+        d.line([(0, y), (1000, y)], fill=tuple(int(top[i] + (bot[i] - top[i]) * t) for i in range(3)))
+    lay = rnd.randrange(3)
+    card_y, card_h = [(520, 800), (120, 800), (300, 900)][lay]
+    d.rounded_rectangle((70, card_y, 930, card_y + card_h), radius=36, fill=(255, 255, 255, 255))
+    sc = min(800 / photo.width, (card_h - 50) / photo.height)
+    ph = photo.resize((max(1, int(photo.width * sc)), max(1, int(photo.height * sc))))
+    im.paste(ph, (500 - ph.width // 2, card_y + (card_h - ph.height) // 2))
+    head = textwrap.wrap(v["overlay"].upper(), 14)[:3]
+    sz = 100 if lay != 2 else 76
+    while sz > 50 and max(d.textlength(l, font=font(sz)) for l in head) > 860:
+        sz -= 6
+    y = [170, card_y + card_h + 50, 100][lay]
+    r, g, b = im.getpixel((500, min(1499, y + 40)))
+    hc = (30, 30, 45) if 0.299 * r + 0.587 * g + 0.114 * b > 150 else (255, 255, 255)  # readable on light or dark
+    for ln in head:
+        d.text((500, y), ln, font=font(sz), fill=hc, anchor="mt")
+        y += int(sz * 1.2)
+    d.rounded_rectangle((300, 1385, 700, 1465), radius=40, fill=tc)
+    d.text((500, 1425), "SAVE FOR LATER", font=font(36), fill=top, anchor="mm")
+    im.save(out, quality=90)
+
+
 def make_image(p, v, out, dry):
     tmp = out.with_name(out.stem + "_base.png")
     gen_base(p, v, tmp, dry)
+    if EXACT["on"]:
+        compose_product(tmp, v, out)
+        tmp.unlink(missing_ok=True)
+        return
     im = Image.open(tmp).convert("RGB")
     w, h = im.size  # crop to 2:3
     tw = int(h * 2 / 3)
@@ -202,13 +254,15 @@ def make_image(p, v, out, dry):
         th = int(w * 3 / 2)
         im = im.crop((0, (h - th) // 2, w, (h - th) // 2 + th))
     im = im.resize((1000, 1500))
-    if CFG["image"].get("overlay_text", True) and CFG["image"]["provider"] != "design":
+    if CFG["image"].get("overlay_text", True) and (CFG["image"]["provider"] != "design" or p.get("image_url")):
         d = ImageDraw.Draw(im, "RGBA")
         lines = textwrap.wrap(v["overlay"].upper(), 16)[:3]
         f = font(88)
         bh = 120 * len(lines) + 60
-        d.rectangle((0, 1500 - bh - 80, 1000, 1500 - 80), fill=(0, 0, 0, 170))
-        y = 1500 - bh - 50
+        lay = sum(map(ord, out.name)) % 3  # 3 layouts so pins of one photo look different
+        y0 = [1500 - bh - 80, 80, (1500 - bh) // 2][lay]
+        d.rectangle((0, y0, 1000, y0 + bh), fill=(0, 0, 0, 150))
+        y = y0 + 30
         for ln in lines:
             d.text((500, y), ln, font=f, fill="white", anchor="mt")
             y += 120
@@ -261,10 +315,10 @@ def export(con):
     lim = (datetime.now() + timedelta(days=29)).isoformat(timespec="seconds")
     rows = con.execute("select id,title,descr,link,board,media_url,sched from pins where status='new' and sched<=? order by sched",
                        (lim,)).fetchall()
-    for i in range(0, len(rows), 200):  # Pinterest limit 200/file
-        chunk = rows[i:i + 200]
+    for i in range(0, len(rows), 100):  # Pinterest limit 100/file
+        chunk = rows[i:i + 100]
         Path("exports").mkdir(exist_ok=True)
-        f = Path("exports") / f"pinterest_bulk_{datetime.now():%Y%m%d}_{i // 200 + 1}.csv"
+        f = Path("exports") / f"pinterest_bulk_{datetime.now():%Y%m%d_%H%M}_{i // 100 + 1}.csv"
         with open(f, "w", newline="", encoding="utf-8") as fh:
             w = csv.writer(fh)
             w.writerow(["Title", "Media URL", "Pinterest board", "Thumbnail", "Description", "Link", "Publish date", "Keywords"])

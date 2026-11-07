@@ -1,0 +1,14 @@
+HOW TO USE (one time setup, 1 minute)
+1. Chrome: Ctrl+Shift+O (bookmarks manager) > right click > Add new bookmark.
+   Name: Grab Picks
+   URL: paste the ONE long line below (starts with javascript:)
+2. Open amazon.com, search a niche, e.g.  boho decor,  sort by Avg. Customer Review.
+3. Click bookmark "Grab Picks" > type category (boho / home-decor / kitchen / slow-living) > OK.
+4. It copies up to 10 well-reviewed products (4.2 stars+, 300 reviews+, no ads). Paste into picks.txt. Save.
+5. Double-click auto.bat. Done.
+
+Needs Amazon page layout unchanged. Not tested on live Amazon. If it says no products or errors, tell Claude.
+Reads only the page you are looking at, one click per page. Do not run it in loops.
+
+BOOKMARK URL (one line):
+javascript:(function(){var c=prompt('Category: boho / home-decor / kitchen / slow-living','boho');if(!c)return;var out=[],seen={};document.querySelectorAll('div[data-component-type="s-search-result"]').forEach(function(d){var a=d.getAttribute('data-asin');if(!a||seen[a])return;if(d.innerText.indexOf('Sponsored')>-1)return;var t=d.querySelector('h2');var im=d.querySelector('img.s-image');var r=d.querySelector('span.a-icon-alt');var n=d.querySelector('span[aria-label*="ratings"],a[aria-label*="ratings"] span,span.s-underline-text');var rt=r?parseFloat(r.innerText):0;var tx=n?n.innerText.trim():'';var rc=/K/i.test(tx)?parseFloat(tx)*1000:(parseInt(tx.replace(/[^0-9]/g,''))||0);if(rt<4.2||rc<300)return;seen[a]=1;out.push([c,(t?t.innerText:'').replace(/[|,]/g,' ').trim(),location.origin+'/dp/'+a,im?im.src:''].join(' | '))});out=out.slice(0,10);if(!out.length){alert('No products matched (rating 4.2+, reviews 300+).');return}var s=out.join('\n');(navigator.clipboard?navigator.clipboard.writeText(s):Promise.reject()).then(function(){alert('Copied '+out.length+' products. Paste into picks.txt')}).catch(function(){prompt('Copy this (Ctrl+A, Ctrl+C), paste into picks.txt',s.replace(/\n/g,' ## '))})})();
