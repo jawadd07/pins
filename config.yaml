@@ -1,0 +1,33 @@
+products_file: products.csv
+out_dir: docs
+text:
+  provider: template                 # template (free, no key) | gemini (free tier, GEMINI_API_KEY) | claude (paid)
+  gemini_model: gemini-2.0-flash     # check current name at aistudio.google.com if error
+claude_model: claude-sonnet-5-5      # only if provider: claude
+variants_per_product: 4              # unique pins per product
+
+image:
+  provider: pollinations             # pollinations (free, no key) | fal (paid) | product (use image_url column)
+  fal_endpoint: https://fal.run/fal-ai/flux/dev
+  overlay_text: true
+
+# GitHub Pages: push site/ folder -> https://USERNAME.github.io/REPO
+media_base_url: https://github.com/jawadd07/pins
+landing_base_url: https://github.com/jawadd07/pins  # empty "" = pin links straight to affiliate url (riskier)
+
+pin_disclosure: "#ad Affiliate link."
+landing_disclosure: "Disclosure: this page contains affiliate links. I may earn a commission at no extra cost to you. As an Amazon Associate I earn from qualifying purchases."
+
+default_board: Home Decor Ideas
+boards:                              # category -> exact Pinterest board name
+  home-decor: Home Decor Ideas
+  kitchen: Kitchen Gadgets
+  fitness: Home Workout
+
+schedule:
+  start_date: ""                     # "" = tomorrow, or 2026-11-10
+  ramp: [5, 10, 15, 20]              # pins/day for week1, week2, week3, week4+
+  hours: [9, 22]                     # random post times in this window
+
+# only for post-due (after API approval). name -> board id
+board_ids: {}
