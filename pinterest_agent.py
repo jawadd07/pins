@@ -88,6 +88,8 @@ def gen_base(p, v, tmp, dry):
                                 "num_images": 1}, timeout=240)
         r.raise_for_status()
         fetch(r.json()["images"][0]["url"], tmp)
+    elif prov == "design":  # free, offline, unlimited: designed text pin
+        draw_design(p, v, tmp)
     elif prov == "pollinations":  # free, no key, rate limited -> slow + retry
         from urllib.parse import quote
         time.sleep(CFG["image"].get("delay", 15))
@@ -111,7 +113,7 @@ def gen_base(p, v, tmp, dry):
     elif prov == "product":  # use product's own image_url
         fetch(p["image_url"], tmp)
     else:
-        raise SystemExit("image.provider must be pollinations | fal | product")
+        raise SystemExit("image.provider must be design | pollinations | fal | product")
 
 
 def font(sz):
@@ -121,6 +123,51 @@ def font(sz):
         except OSError:
             pass
     return ImageFont.load_default()
+
+
+PALETTES = [  # top, bottom, text, accent
+    ((200, 85, 61), (242, 208, 164), (255, 255, 255), (255, 240, 225)),
+    ((79, 109, 91), (220, 229, 214), (255, 255, 255), (240, 247, 236)),
+    ((31, 42, 68), (224, 182, 107), (255, 255, 255), (255, 236, 200)),
+    ((232, 180, 184), (255, 241, 230), (74, 40, 50), (120, 60, 75)),
+    ((92, 60, 110), (232, 200, 225), (255, 255, 255), (250, 232, 247)),
+    ((40, 100, 110), (200, 232, 228), (255, 255, 255), (232, 250, 247)),
+]
+
+
+def draw_design(p, v, tmp):
+    rnd = random.Random(hash(p["name"]) % 10**6 + len(v["overlay"]))
+    top, bot, tc, ac = rnd.choice(PALETTES)
+    im = Image.new("RGB", (1000, 1500))
+    d = ImageDraw.Draw(im, "RGBA")
+    for y in range(1500):
+        t = y / 1499
+        d.line([(0, y), (1000, y)], fill=tuple(int(top[i] + (bot[i] - top[i]) * t) for i in range(3)))
+    for _ in range(5):  # soft decor circles
+        r = rnd.randint(120, 320)
+        x, y = rnd.randint(-100, 1100), rnd.randint(-100, 1600)
+        d.ellipse((x - r, y - r, x + r, y + r), fill=ac + (45,))
+    cat = (p.get("category") or "ideas").replace("-", " ").upper()
+    f_small = font(40)
+    w = d.textlength(cat, font=f_small) + 70
+    d.rounded_rectangle((500 - w / 2, 150, 500 + w / 2, 225), radius=38, outline=tc, width=4)
+    d.text((500, 188), cat, font=f_small, fill=tc, anchor="mm")
+    head = textwrap.wrap(v["overlay"].upper(), 13)[:4]
+    sz = 118
+    while sz > 60 and max(d.textlength(l, font=font(sz)) for l in head) > 860:
+        sz -= 6
+    y = 470
+    for ln in head:
+        d.text((500, y), ln, font=font(sz), fill=tc, anchor="mm")
+        y += int(sz * 1.2)
+    d.line([(380, y + 10), (620, y + 10)], fill=tc, width=6)
+    y += 90
+    for ln in textwrap.wrap(p["name"], 24)[:3]:
+        d.text((500, y), ln, font=font(58), fill=ac, anchor="mm")
+        y += 75
+    d.rounded_rectangle((250, 1230, 750, 1330), radius=50, fill=tc)
+    d.text((500, 1280), "SAVE FOR LATER", font=font(44), fill=top, anchor="mm")
+    im.save(tmp)
 
 
 def make_image(p, v, out, dry):
@@ -135,7 +182,7 @@ def make_image(p, v, out, dry):
         th = int(w * 3 / 2)
         im = im.crop((0, (h - th) // 2, w, (h - th) // 2 + th))
     im = im.resize((1000, 1500))
-    if CFG["image"].get("overlay_text", True):
+    if CFG["image"].get("overlay_text", True) and CFG["image"]["provider"] != "design":
         d = ImageDraw.Draw(im, "RGBA")
         lines = textwrap.wrap(v["overlay"].upper(), 16)[:3]
         f = font(88)

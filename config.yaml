@@ -7,22 +7,23 @@ claude_model: claude-sonnet-5-5      # only if provider: claude
 variants_per_product: 4              # unique pins per product
 
 image:
-  provider: pollinations             # pollinations (free, no key) | fal (paid) | product (use image_url column)
+  provider: design                   # design (free, offline) | pollinations (now needs key) | fal (paid) | product (image_url)
   fal_endpoint: https://fal.run/fal-ai/flux/dev
   overlay_text: true
 
-# GitHub Pages: push site/ folder -> https://USERNAME.github.io/REPO
-media_base_url: https://github.com/jawadd07/pins
-landing_base_url: https://github.com/jawadd07/pins  # empty "" = pin links straight to affiliate url (riskier)
+# GitHub Pages: push site/ folder -> https://jawadd07.github.io/pins
+media_base_url: https://jawadd07.github.io/pins
+landing_base_url: https://jawadd07.github.io/pins   # empty "" = pin links straight to affiliate url (riskier)
 
 pin_disclosure: "#ad Affiliate link."
 landing_disclosure: "Disclosure: this page contains affiliate links. I may earn a commission at no extra cost to you. As an Amazon Associate I earn from qualifying purchases."
 
 default_board: Home Decor Ideas
 boards:                              # category -> exact Pinterest board name
+  boho: Boho Decor Ideas
   home-decor: Home Decor Ideas
   kitchen: Kitchen Gadgets
-  fitness: Home Workout
+  slow-living: Cozy Slow Living
 
 schedule:
   start_date: ""                     # "" = tomorrow, or 2026-11-10
