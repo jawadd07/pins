@@ -1,0 +1,13 @@
+# One line per product:  product name | Amazon product link (or 10-char ASIN)
+# Get link: open the exact product on amazon.com -> copy page URL. Tag is added for you.
+# Lines with PASTE are skipped.
+Rattan Accent Chair | PASTE LINK HERE
+Bamboo Beaded Curtain | PASTE LINK HERE
+Woven Seagrass Storage Baskets | PASTE LINK HERE
+Boho Jute Area Rug | PASTE LINK HERE
+Floating Wall Shelves Set | PASTE LINK HERE
+Gold Geometric Wall Mirror | PASTE LINK HERE
+Acacia Wood Serving Board | PASTE LINK HERE
+Cabbage Shredder and Kitchen Slicer | PASTE LINK HERE
+Weighted Sleep Blanket | PASTE LINK HERE
+Aromatherapy Essential Oil Diffuser | PASTE LINK HERE

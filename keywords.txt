@@ -1,0 +1,13 @@
+# One product idea per line.  Format:  category | product search phrase
+# Categories: boho, home-decor, kitchen, slow-living
+# Ideas source: amazon.com Best Sellers pages (just read them), trends.pinterest.com
+# Lines already added are skipped. Max 5 new products per run.
+boho | macrame wall hanging
+boho | rattan pendant light
+boho | boho throw pillow covers
+home-decor | art deco table lamp
+home-decor | arched floor mirror
+kitchen | glass food storage containers
+kitchen | cutting board set
+slow-living | silk sleep mask
+slow-living | sunrise alarm clock

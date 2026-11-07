@@ -4,10 +4,10 @@ text:
   provider: template                 # template (free, no key) | gemini (free tier, GEMINI_API_KEY) | claude (paid)
   gemini_model: gemini-2.0-flash     # check current name at aistudio.google.com if error
 claude_model: claude-sonnet-5-5      # only if provider: claude
-variants_per_product: 4              # unique pins per product
+variants_per_product: 8              # unique pins per product
 
 image:
-  provider: design                   # design (free, offline) | pollinations (now needs key) | fal (paid) | product (image_url)
+  provider: pexels                   # pexels (free photos, key in keys.bat) | pollinations (now needs key) | fal (paid) | product (image_url)
   fal_endpoint: https://fal.run/fal-ai/flux/dev
   overlay_text: true
 

@@ -29,7 +29,12 @@ ANGLES = [
     ("Budget-Friendly {k}: {n}", "Want {k} without overspending? {n} is worth a look. Save for your next shopping list."),
     ("Gift Idea: {n}", "Need a useful gift? {n} is a great idea for anyone who cares about {k}. Save it for later."),
     ("Before You Buy: {n}", "Researching {k}? Take a look at {n} and see if it fits your needs. Save this pin to compare later."),
+    ("Small Space Hack: {n}", "Short on room? {n} fits {k} ideas without the clutter. Save this pin for your next home refresh."),
+    ("Cozy Home Find: {n}", "Add a cozy touch with {n}. A simple way to upgrade {k}. Pin it and come back when you are ready."),
+    ("Weekend Refresh: {n}", "Planning a weekend refresh? {n} is an easy win for {k}. Save it to your board."),
+    ("Style Inspo: {n}", "Style inspiration for {k}: {n}. Tap to see the details and save for later."),
 ]
+
 
 
 def gen_text(p, n, dry, start=0):
@@ -88,6 +93,21 @@ def gen_base(p, v, tmp, dry):
                                 "num_images": 1}, timeout=240)
         r.raise_for_status()
         fetch(r.json()["images"][0]["url"], tmp)
+    elif prov == "pexels":  # free real photos, free key: pexels.com/api
+        key = os.environ["PEXELS_API_KEY"]
+        q = (p.get("keywords", "").split(";")[0] or p["name"]).strip()
+        used = set(open("used_photos.txt").read().split()) if os.path.exists("used_photos.txt") else set()
+        r = requests.get("https://api.pexels.com/v1/search", headers={"Authorization": key},
+                         params={"query": q, "orientation": "portrait", "per_page": 30}, timeout=60)
+        r.raise_for_status()
+        allp = r.json().get("photos", [])
+        photos = [x for x in allp if str(x["id"]) not in used] or allp
+        if not photos:
+            raise RuntimeError("no pexels photo for " + q)
+        ph = random.choice(photos[:15])
+        fetch(ph["src"]["large2x"], tmp)
+        with open("used_photos.txt", "a") as uf:
+            uf.write(str(ph["id"]) + "\n")
     elif prov == "design":  # free, offline, unlimited: designed text pin
         draw_design(p, v, tmp)
     elif prov == "pollinations":  # free, no key, rate limited -> slow + retry
@@ -113,7 +133,7 @@ def gen_base(p, v, tmp, dry):
     elif prov == "product":  # use product's own image_url
         fetch(p["image_url"], tmp)
     else:
-        raise SystemExit("image.provider must be design | pollinations | fal | product")
+        raise SystemExit("image.provider must be design | pexels | pollinations | fal | product")
 
 
 def font(sz):
@@ -229,7 +249,8 @@ def schedule(con):
         rows = rows[len(take):]
         mins = sorted(random.sample(range(h0 * 60, h1 * 60), len(take)))
         for (pid, _), m in zip(take, mins):
-            t = d.replace(hour=m // 60, minute=m % 60).isoformat(timespec="seconds")
+            off = s.get("audience_utc_offset", -5)  # hours in audience tz (US Eastern=-5); Pinterest reads CSV as UTC
+            t = (d.replace(hour=m // 60, minute=m % 60) - timedelta(hours=off)).isoformat(timespec="seconds")
             con.execute("update pins set sched=? where id=?", (t, pid))
         day += 1
     con.commit()
@@ -266,6 +287,7 @@ def cmd_run(a):
     media = CFG["media_base_url"].rstrip("/")
     for p in read_products():
         slug = slugify(p["name"])
+        write_page(p, slug)  # always refresh page so link edits reach old pins
         have = con.execute("select count(*) from pins where slug=?", (slug,)).fetchone()[0]
         need = CFG["variants_per_product"] - have
         if need <= 0:

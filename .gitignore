@@ -2,3 +2,5 @@
 state.db
 exports/
 __pycache__/
+keys.bat
+used_photos.txt
