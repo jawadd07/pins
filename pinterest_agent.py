@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Pinterest affiliate pipeline: products.csv -> text -> images -> landing pages -> drip schedule -> bulk CSV / API post."""
-import argparse, csv, hashlib, json, os, random, re, sqlite3, textwrap
+import argparse, csv, hashlib, json, os, random, re, sqlite3, textwrap, time
 from datetime import datetime, timedelta
 from pathlib import Path
 import requests, yaml
@@ -88,10 +88,26 @@ def gen_base(p, v, tmp, dry):
                                 "num_images": 1}, timeout=240)
         r.raise_for_status()
         fetch(r.json()["images"][0]["url"], tmp)
-    elif prov == "pollinations":  # free, no key
+    elif prov == "pollinations":  # free, no key, rate limited -> slow + retry
         from urllib.parse import quote
-        u = f"https://image.pollinations.ai/prompt/{quote(v['image_prompt'])}?width=1000&height=1500&model=flux&nologo=true&seed={random.randint(1,10**6)}"
-        fetch(u, tmp)
+        time.sleep(CFG["image"].get("delay", 15))
+        last = None
+        for attempt in range(5):
+            try:
+                u = (f"https://image.pollinations.ai/prompt/{quote(v['image_prompt'])}"
+                     f"?width=1000&height=1500&model=flux&nologo=true&seed={random.randint(1, 10**6)}")
+                r = requests.get(u, timeout=180)
+                ct = r.headers.get("content-type", "")
+                if r.ok and ct.startswith("image/"):
+                    tmp.write_bytes(r.content)
+                    Image.open(tmp).verify()
+                    return
+                last = f"{r.status_code} {ct} {r.text[:80]}"
+            except Exception as e:
+                last = str(e)
+            print(f"  image retry {attempt + 1}/5: {last}")
+            time.sleep(30)
+        raise RuntimeError("pollinations failed: " + str(last))
     elif prov == "product":  # use product's own image_url
         fetch(p["image_url"], tmp)
     else:
@@ -212,7 +228,12 @@ def cmd_run(a):
         write_page(p, slug)
         for i, v in enumerate(variants, start=have):
             img = OUT / "images" / f"{slug}-v{i}.jpg"
-            make_image(p, v, img, a.dry)
+            try:
+                make_image(p, v, img, a.dry)
+            except Exception as e:
+                print("  image failed, rerun later:", e)
+                img.with_name(img.stem + "_base.png").unlink(missing_ok=True)
+                break
             link = f"{base}/pages/{slug}.html?v={i}" if base else p["affiliate_url"]
             desc = f"{v['description'].strip()} {CFG['pin_disclosure']}"[:500]
             title = v["title"][:100]
