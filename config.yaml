@@ -24,10 +24,18 @@ boards:                              # category -> exact Pinterest board name
   home-decor: Home Decor Ideas
   kitchen: Kitchen Gadgets
   slow-living: Cozy Slow Living
+  fashion: Fashion Finds
+  jewelry: Statement Jewelry
+  beauty: Beauty Favorites
+  gifts: Gift Ideas
+  organization: Home Organization
+  fitness: Home Workout
+  pets: Pet Lovers
+  party: Party Ideas
 
 schedule:
   start_date: ""                     # "" = tomorrow, or 2026-11-10
-  ramp: [5, 10, 15, 20]              # pins/day for week1, week2, week3, week4+
+  ramp: [15, 20]                     # pins/day, week1, week2+
   hours: [9, 22]                     # random post times in this window
 
 # only for post-due (after API approval). name -> board id

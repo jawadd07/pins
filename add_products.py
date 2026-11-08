@@ -50,7 +50,7 @@ def make_row(cat, kw, tag, link=None):
     url = (product_link(link, tag) if link else None) or f"https://www.amazon.com/s?k={quote_plus(kw)}&tag={tag}"
     return {"name": kw.title(), "affiliate_url": url, "network": "amazon", "category": cat, "board": "",
             "keywords": ";".join(dict.fromkeys([kw.lower(), cat.replace("-", " ")])),
-            "description": f"Popular {kw.lower()} pick worth a look for your home", "image_url": ""}
+            "description": f"Popular {kw.lower()} pick worth a look", "image_url": ""}
 
 
 def from_file(path):
@@ -238,6 +238,8 @@ if __name__ == "__main__":
         raise SystemExit
     cats = list(cfg.get("boards", {}).keys())
     cand = from_gemini(cfg, cats, 3) if a.ideas else from_file(a.file)
+    if os.path.exists("keywords_bank.txt"):  # built-in list: runs automatically when keywords.txt is used up
+        cand += from_file("keywords_bank.txt")
     have = {r["name"].lower() for r in rows}
     new = []
     for cat, kw, link in cand:

@@ -38,13 +38,43 @@ ANGLES = [
 
 
 
+STYLE = {"fashion", "jewelry", "beauty", "gifts", "party"}
+UTIL = {"organization", "fitness", "pets"}
+ANGLES_STYLE = [
+    ("Style Inspo: {n}", "Looking for {k}? {n} is an easy way to add style. Save this pin for later."),
+    ("Trending Now: {n}", "Searches for {k} keep climbing. See {n} and save it for your next look."),
+    ("Gift Idea: {n}", "Need a gift idea? {n} fits anyone into {k}. Save it for later."),
+    ("Easy Upgrade: {n}", "Upgrade your look with {k}. {n} is a simple pick. Pin it for later."),
+    ("Wishlist Find: {n}", "Adding {k} to your wishlist? Take a look at {n} and save it."),
+    ("Must-Have: {n}", "A must-have for {k} fans: {n}. Tap to see the details."),
+    ("Everyday Pick: {n}", "Easy to wear or use every day. {n} is a great {k} find. Save for later."),
+    ("Budget Style Find: {n}", "Want {k} without overspending? {n} is worth a look. Save it."),
+    ("Pin For Later: {n}", "Planning your {k} shopping list? Save {n} for later."),
+    ("Popular Pick: {n}", "{n} keeps showing up in {k} searches. Save this pin to compare later."),
+]
+ANGLES_UTIL = [
+    ("Easy Win: {n}", "Want better {k}? {n} makes it simple. Save this pin for later."),
+    ("Life Hack: {n}", "A simple {k} hack: {n}. Pin it so you can find it again."),
+    ("Worth It: {n}", "Is {n} worth it for {k}? Take a look and save it to compare."),
+    ("Beginner Friendly: {n}", "New to {k}? {n} is an easy place to start. Save for later."),
+    ("Save Time With {n}", "Make {k} easier with {n}. Save this pin for your next shopping list."),
+    ("Smart Pick: {n}", "A smart pick for {k}: {n}. Tap to see more and save it."),
+    ("Budget Find: {n}", "Looking for {k} on a budget? {n} is worth a look."),
+    ("Daily Routine Upgrade: {n}", "Upgrade your routine with {n}. Great for {k}. Pin it for later."),
+    ("Top Pick: {n}", "Our top pick for {k}: {n}. Save this pin so you do not lose it."),
+    ("Gift Idea: {n}", "Need a useful gift? {n} is great for anyone into {k}. Save it."),
+]
+
+
 def gen_text(p, n, dry, start=0):
     prov = CFG.get("text", {}).get("provider", "template")
     kws = [k.strip() for k in p.get("keywords", "").split(";") if k.strip()]
     if dry or prov == "template":
         out = []
+        cat = p.get("category", "")
+        angles = ANGLES_STYLE if cat in STYLE else ANGLES_UTIL if cat in UTIL else ANGLES
         for i in range(n):
-            t, d = ANGLES[(start + i) % len(ANGLES)]
+            t, d = angles[(start + i) % len(angles)]
             k = kws[i % len(kws)] if kws else p.get("category", "your home")
             out.append({"title": t.format(n=p["name"], k=k.title()), "description": d.format(n=p["name"], k=k),
                         "overlay": f"{k} idea", "image_prompt":
@@ -391,6 +421,19 @@ def cmd_post_due(a):
             con.execute("update pins set status='posted' where id=?", (pid,)); con.commit()
 
 
+def cmd_reschedule(a):
+    """re-time pins that are not posted yet (use with new ramp). Old scheduled pins on Pinterest must be deleted by hand first."""
+    con = db()
+    q = "update pins set sched=NULL, status='new' where status in ('new','exported')"
+    if a.after:
+        con.execute(q + " and sched>=?", (a.after,))
+    else:
+        con.execute(q)
+    con.commit()
+    schedule(con)
+    export(con)
+
+
 def cmd_stats(a):
     for s, c in db().execute("select status,count(*) from pins group by status"):
         print(s, c)
@@ -398,12 +441,13 @@ def cmd_stats(a):
 
 if __name__ == "__main__":
     ap = argparse.ArgumentParser()
-    ap.add_argument("cmd", choices=["run", "post-due", "stats"])
+    ap.add_argument("cmd", choices=["run", "post-due", "stats", "reschedule"])
     ap.add_argument("--config", default="config.yaml")
+    ap.add_argument("--after", default="", help="reschedule: only pins dated on/after YYYY-MM-DD")
     ap.add_argument("--dry", action="store_true", help="no API calls, grey placeholder images")
     a = ap.parse_args()
     CFG.update(yaml.safe_load(open(a.config, encoding="utf-8")))
     OUT = Path(CFG.get("out_dir", "site"))
     (OUT / "images").mkdir(parents=True, exist_ok=True)
     (OUT / "pages").mkdir(parents=True, exist_ok=True)
-    {"run": cmd_run, "post-due": cmd_post_due, "stats": cmd_stats}[a.cmd](a)
+    {"run": cmd_run, "post-due": cmd_post_due, "stats": cmd_stats, "reschedule": cmd_reschedule}[a.cmd](a)
