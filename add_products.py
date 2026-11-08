@@ -134,6 +134,66 @@ def import_picks(path, rows, tag, cfg, limit):
     return new
 
 
+DS = r"(?:digistore24|checkout-ds24)\.com"
+
+
+def ds24_parse(txt, aff_known):
+    """digistore24 promo link / product url / bare product id -> (official promolink, affiliate id)"""
+    txt = txt.strip()
+    m = re.search(DS + r"/redir/(\d+)/([A-Za-z0-9_-]+)", txt)
+    if m:
+        return f"https://www.checkout-ds24.com/redir/{m.group(1)}/{m.group(2)}/pin", m.group(2)
+    m = re.search(DS + r"/(?:product|redir)/(\d+)", txt) or re.fullmatch(r"(\d{4,8})", txt)
+    if m and aff_known:
+        return f"https://www.checkout-ds24.com/redir/{m.group(1)}/{aff_known}/pin", aff_known
+    return None, aff_known
+
+
+def import_digital(path, rows, cfg, limit):
+    """digital.txt (ALL non-Amazon stores):  category | product name | affiliate link (or digistore24 product id) | network (optional)
+    Takes up to `limit` products per run, the rest stay queued in the file."""
+    aff = open("ds24_id.txt").read().strip() if os.path.exists("ds24_id.txt") else ""
+    aff = aff or cfg.get("digistore_id", "")
+    have = {r["name"].lower() for r in rows}
+    new, remaining, done = [], [], []
+    for raw in open(path, encoding="utf-8").read().splitlines():
+        ln = raw.strip()
+        parts = [x.strip() for x in ln.split("|")]
+        if not ln or ln.startswith("#") or len(parts) < 3:
+            remaining.append(raw)
+            continue
+        if len(new) >= limit:
+            remaining.append(raw)
+            continue
+        cat, name, link = parts[0], clean(parts[1]), parts[2]
+        net = parts[3].strip().lower() if len(parts) > 3 and parts[3].strip() else "digistore24"
+        if cat not in cfg.get("boards", {}):
+            print("kept (category not in config boards):", cat, "|", name)
+            remaining.append(raw)
+            continue
+        if link.startswith("http") and not re.search(DS, link):  # any other store: keep affiliate link as is
+            url = link
+            if net == "digistore24":
+                net = re.sub(r"^www\.", "", re.sub(r"https?://([^/]+)/.*", r"\1", link + "/"))
+        else:
+            url, aff = ds24_parse(link, aff)
+        if not url:
+            print("kept (need a full promo link first to learn your ID):", name)
+            remaining.append(raw)
+            continue
+        done.append(raw)
+        if name.lower() in have:
+            continue
+        have.add(name.lower())
+        new.append({"name": name.title() if name.islower() else name, "affiliate_url": url, "network": net,
+                    "category": cat, "board": "",
+                    "keywords": ";".join(dict.fromkeys([name.lower(), cat.replace("-", " ")])),
+                    "description": f"{name} - a popular pick", "image_url": ""})
+    if aff:
+        open("ds24_id.txt", "w").write(aff)
+    return new, remaining, done
+
+
 def sync_links_file(path, rows):
     """make sure every product has a line in links.txt"""
     have = set()
@@ -199,6 +259,7 @@ if __name__ == "__main__":
     ap.add_argument("--file", default="keywords.txt")
     ap.add_argument("--setlinks", metavar="FILE")
     ap.add_argument("--import", dest="imp", metavar="FILE", help="import picks.txt made by the bookmarklet")
+    ap.add_argument("--digital", metavar="FILE", help="import digistore24 products from digital.txt")
     ap.add_argument("--openlinks", action="store_true", help="open Amazon search tabs for products without exact link")
     ap.add_argument("--max", type=int, default=5)
     ap.add_argument("--config", default="config.yaml")
@@ -208,6 +269,25 @@ if __name__ == "__main__":
     tag = find_tag(rows, cfg)
     if not tag:
         raise SystemExit("no Amazon tag found. add amazon_tag: yourtag-20 to config.yaml")
+    if a.digital:
+        if not os.path.exists(a.digital) or not open(a.digital, encoding="utf-8").read().strip():
+            print("digital.txt empty, nothing to import")
+            raise SystemExit
+        new, remaining, done = import_digital(a.digital, rows, cfg, a.max)
+        if new:
+            shutil.copy(CSV, CSV + ".bak")
+            with open(CSV, "a", newline="", encoding="utf-8") as f:
+                w = csv.DictWriter(f, fieldnames=COLS)
+                for r in new:
+                    w.writerow(r)
+            with open("digital_done.txt", "a", encoding="utf-8") as f:
+                f.write("\n".join(done) + "\n")
+            open(a.digital, "w", encoding="utf-8").write("\n".join(remaining) + ("\n" if remaining else ""))
+            print("digital imported", len(new), ":", ", ".join(r["name"] for r in new), "| still queued:",
+                  sum(1 for x in remaining if x.strip() and not x.startswith("#")))
+        else:
+            print("no new digital products")
+        raise SystemExit
     if a.imp:
         if not os.path.exists(a.imp) or not open(a.imp, encoding="utf-8").read().strip():
             print("picks.txt empty, nothing to import")

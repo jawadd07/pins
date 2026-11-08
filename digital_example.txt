@@ -1,0 +1,8 @@
+# digital.txt = every store except Amazon.   One product per line:
+#   category | product name | affiliate link | network (optional name)
+# Categories: any in config.yaml boards (boho, kitchen, crochet, planners, weddings, languages ...)
+#
+# Digistore24 (your ID Jawadd07 is saved): product id alone is enough
+crochet | Beginner Crochet Patterns Bundle | 123456
+# Any other store (Etsy/Awin, Walmart/Impact, eBay, CJ ...): paste the affiliate link from that network
+boho | Handmade Macrame Wall Hanging | https://www.awin1.com/cread.php?awinmid=XXXX&awinaffid=YYYY&ued=https%3A%2F%2Fwww.etsy.com%2Flisting%2F123 | etsy

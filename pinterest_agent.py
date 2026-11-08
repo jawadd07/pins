@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Pinterest affiliate pipeline: products.csv -> text -> images -> landing pages -> drip schedule -> bulk CSV / API post."""
-import argparse, csv, hashlib, json, os, random, re, sqlite3, textwrap, time
+import argparse, csv, hashlib, html, json, os, random, re, sqlite3, textwrap, time
 from datetime import datetime, timedelta
 from pathlib import Path
 import requests, yaml
@@ -39,7 +39,7 @@ ANGLES = [
 
 
 STYLE = {"fashion", "jewelry", "beauty", "gifts", "party"}
-UTIL = {"organization", "fitness", "pets"}
+UTIL = {"organization", "fitness", "pets", "crochet", "planners", "weddings", "languages"}
 ANGLES_STYLE = [
     ("Style Inspo: {n}", "Looking for {k}? {n} is an easy way to add style. Save this pin for later."),
     ("Trending Now: {n}", "Searches for {k} keep climbing. See {n} and save it for your next look."),
@@ -136,18 +136,18 @@ def gen_base(p, v, tmp, dry):
     elif prov == "pexels":  # free real photos, free key: pexels.com/api
         key = os.environ["PEXELS_API_KEY"]
         kw0 = (p.get("keywords", "").split(";")[0] or p["name"]).strip()
-        q = p.get("photo_query") or p["name"]
-        used = set(open("used_photos.txt").read().split()) if os.path.exists("used_photos.txt") else set()
-        r = requests.get("https://api.pexels.com/v1/search", headers={"Authorization": key},
-                         params={"query": q, "orientation": "portrait", "per_page": 30}, timeout=60)
-        r.raise_for_status()
-        allp = r.json().get("photos", [])
-        if len(allp) < 5:  # product name too specific -> fall back to first keyword
+        cat = p.get("category", "")
+        cat_q = {"crochet": "crochet yarn", "planners": "planner notebook desk", "weddings": "wedding planning",
+                 "languages": "language learning books"}.get(cat, (cat or "home").replace("-", " "))
+        allp, q = [], ""
+        for q in dict.fromkeys([p.get("photo_query") or p["name"], kw0, cat_q]):  # name -> keyword -> category
             r = requests.get("https://api.pexels.com/v1/search", headers={"Authorization": key},
-                             params={"query": kw0, "orientation": "portrait", "per_page": 30}, timeout=60)
+                             params={"query": q, "orientation": "portrait", "per_page": 30}, timeout=60)
             r.raise_for_status()
             allp = r.json().get("photos", [])
-            q = kw0
+            if len(allp) >= 5:
+                break
+        used = set(open("used_photos.txt").read().split()) if os.path.exists("used_photos.txt") else set()
         photos = [x for x in allp if str(x["id"]) not in used] or allp
         if not photos:
             raise RuntimeError("no pexels photo for " + q)
@@ -301,18 +301,67 @@ def make_image(p, v, out, dry):
 
 
 # ---------- landing page ----------
-PAGE = """<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>{name}</title><style>body{{font-family:system-ui;max-width:640px;margin:40px auto;padding:0 16px;line-height:1.6}}
+PAGE = """<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>{name}</title><meta name="description" content="{desc}">
+<style>body{{font-family:system-ui,Segoe UI,Arial,sans-serif;max-width:640px;margin:0 auto;padding:24px 16px;line-height:1.6;color:#222}}
+a.home{{color:#e60023;text-decoration:none;font-size:14px}}img{{width:100%;border-radius:16px;margin:16px 0}}
 a.b{{display:inline-block;background:#e60023;color:#fff;padding:14px 28px;border-radius:999px;text-decoration:none;font-weight:700}}
-small{{color:#666}}</style></head><body><h1>{name}</h1><p>{desc}</p>
+small{{color:#666;display:block;margin-top:24px}}</style></head><body>
+<a class="home" href="../index.html">&larr; All picks</a><h1>{name}</h1>{img}<p>{desc}</p>
 <p><a class="b" rel="sponsored nofollow noopener" href="{url}">Check it out</a></p>
-<p><small>{disc}</small></p></body></html>"""
+<small>{disc}</small></body></html>"""
 
 
 def write_page(p, slug):
     pg = OUT / "pages" / f"{slug}.html"
-    pg.write_text(PAGE.format(name=p["name"], desc=p.get("description", ""), url=p["affiliate_url"],
-                              disc=CFG["landing_disclosure"]), encoding="utf-8")
+    disc = CFG["landing_disclosure"] if p.get("network", "amazon") == "amazon" else CFG.get(
+        "landing_disclosure_generic", "Disclosure: this page contains affiliate links. I may earn a commission at no extra cost to you.")
+    img = f'<img src="../images/{slug}-v0.jpg" alt="{html.escape(p["name"])}">' if (OUT / "images" / f"{slug}-v0.jpg").exists() else ""
+    pg.write_text(PAGE.format(name=html.escape(p["name"]), desc=html.escape(p.get("description", "")), url=html.escape(p["affiliate_url"]),
+                              disc=html.escape(disc), img=img), encoding="utf-8")
+
+
+SITE_CSS = """body{font-family:system-ui,Segoe UI,Arial,sans-serif;margin:0;color:#222;background:#fafafa;line-height:1.6}
+header{background:#fff;padding:32px 16px;text-align:center;border-bottom:1px solid #eee}header h1{margin:0 0 8px}
+main{max-width:1000px;margin:0 auto;padding:16px}h2{margin-top:40px}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:16px}
+.card{background:#fff;border-radius:14px;overflow:hidden;text-decoration:none;color:#222;box-shadow:0 1px 4px rgba(0,0,0,.08)}
+.card img{width:100%;aspect-ratio:2/3;object-fit:cover;display:block}.card span{display:block;padding:10px 12px;font-weight:600;font-size:14px}
+footer{max-width:1000px;margin:40px auto;padding:16px;color:#666;font-size:13px}a{color:#e60023}"""
+
+
+def write_site(prods):
+    """home page + privacy page, rebuilt every run so the site grows with the pins"""
+    groups = {}
+    for p in prods:
+        groups.setdefault(p.get("category", ""), []).append(p)
+    order = [c for c in CFG.get("boards", {}) if c in groups] + [c for c in groups if c not in CFG.get("boards", {})]
+    amazon = any(p.get("network", "amazon") == "amazon" for p in prods)
+    disc = CFG.get("landing_disclosure_generic", "Disclosure: this site contains affiliate links. I may earn a commission at no extra cost to you.")
+    if amazon:
+        disc += " As an Amazon Associate I earn from qualifying purchases."
+    secs = []
+    for c in order:
+        title = html.escape(CFG.get("boards", {}).get(c, c.replace("-", " ").title()))
+        cards = []
+        for p in groups[c]:
+            slug = slugify(p["name"])
+            im = f'<img loading="lazy" src="images/{slug}-v0.jpg" alt="{html.escape(p["name"])}">' if (OUT / "images" / f"{slug}-v0.jpg").exists() else ""
+            cards.append(f'<a class="card" href="pages/{slug}.html">{im}<span>{html.escape(p["name"])}</span></a>')
+        secs.append(f"<h2>{title}</h2><div class=\"grid\">{''.join(cards)}</div>")
+    home = f"""<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Style and Home Picks</title><meta name="description" content="Style, home decor, kitchen, gift and lifestyle picks gathered from my Pinterest boards.">
+<style>{SITE_CSS}</style></head><body>
+<header><h1>Style and Home Picks</h1><p>Ideas for your home, wardrobe and gifts, shared on <a href="https://www.pinterest.com/jawadd_07/">Pinterest</a>.<br>Each page links to a product I think is worth a look.</p></header>
+<main><p><small>{html.escape(disc)}</small></p>{''.join(secs)}</main>
+<footer><p>{html.escape(disc)}</p><p><a href="privacy.html">Privacy</a></p></footer></body></html>"""
+    (OUT / "index.html").write_text(home, encoding="utf-8")
+    priv = f"""<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Privacy</title><style>{SITE_CSS}</style></head><body><main><p><a href="index.html">&larr; Home</a></p><h1>Privacy and disclosure</h1>
+<p>This site does not ask for or store personal information and does not run its own accounts or comments.</p>
+<p>Product links lead to other websites (for example Amazon or Digistore24). Those sites have their own cookies and privacy policies.</p>
+<p>{html.escape(disc)}</p></main></body></html>"""
+    (OUT / "privacy.html").write_text(priv, encoding="utf-8")
 
 
 # ---------- schedule ----------
@@ -398,6 +447,10 @@ def cmd_run(a):
             except sqlite3.IntegrityError:
                 print("  dup skip", title)
         con.commit()
+    prods = read_products()
+    for p in prods:
+        write_page(p, slugify(p["name"]))  # again, now images exist
+    write_site(prods)
     schedule(con)
     export(con)
     print("done. push 'docs/' to GitHub, then upload bulk CSV in Pinterest.")

@@ -32,6 +32,10 @@ boards:                              # category -> exact Pinterest board name
   fitness: Home Workout
   pets: Pet Lovers
   party: Party Ideas
+  crochet: Crochet Patterns
+  planners: Planners and Printables
+  weddings: Wedding Planning
+  languages: Language Learning
 
 schedule:
   start_date: ""                     # "" = tomorrow, or 2026-11-10
