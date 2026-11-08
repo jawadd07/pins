@@ -349,7 +349,7 @@ def write_site(prods):
             im = f'<img loading="lazy" src="images/{slug}-v0.jpg" alt="{html.escape(p["name"])}">' if (OUT / "images" / f"{slug}-v0.jpg").exists() else ""
             cards.append(f'<a class="card" href="pages/{slug}.html">{im}<span>{html.escape(p["name"])}</span></a>')
         secs.append(f"<h2>{title}</h2><div class=\"grid\">{''.join(cards)}</div>")
-    home = f"""<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+    home = f"""<!doctype html><html lang="en"><head><meta charset="utf-8"><!-- Awin --><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Style and Home Picks</title><meta name="description" content="Style, home decor, kitchen, gift and lifestyle picks gathered from my Pinterest boards.">
 <style>{SITE_CSS}</style></head><body>
 <header><h1>Style and Home Picks</h1><p>Ideas for your home, wardrobe and gifts, shared on <a href="https://www.pinterest.com/jawadd_07/">Pinterest</a>.<br>Each page links to a product I think is worth a look.</p></header>
