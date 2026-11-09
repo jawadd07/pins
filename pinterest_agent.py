@@ -92,8 +92,13 @@ def gen_text(p, n, dry, start=0):
         for i in range(n):
             t, d = angles[(start + i) % len(angles)]
             k = kws[i % len(kws)] if kws else p.get("category", "your home")
+            if cat in DESIGN:      # vector packs: a hook that says what it is, not "... idea"
+                hooks = [f"{k} vector pack", f"{k} vectors", "editable eps vectors", f"{k} design set", "commercial use vectors", f"{k} clipart bundle", "vector art bundle", "instant download"]
+                overlay = hooks[(start + i) % len(hooks)]
+            else:
+                overlay = f"{k} idea"
             out.append({"title": t.format(n=p["name"], k=k.title()), "description": d.format(n=p["name"], k=k),
-                        "overlay": f"{k} idea", "image_prompt":
+                        "overlay": overlay, "image_prompt":
                         f"{p['name']}, {k}, lifestyle photo, bright natural light, vertical composition, no text"})
         return out
     prompt = f"""Write {n} DIFFERENT Pinterest pin variants for this product.
