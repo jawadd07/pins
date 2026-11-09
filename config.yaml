@@ -20,6 +20,7 @@ landing_disclosure: "Disclosure: this page contains affiliate links. I may earn 
 
 default_board: Home Decor Ideas
 boards:                              # category -> exact Pinterest board name
+  design: Vector Art and Design Resources
   boho: Boho Decor Ideas
   home-decor: Home Decor Ideas
   kitchen: Kitchen Gadgets
@@ -44,3 +45,4 @@ schedule:
 
 # only for post-due (after API approval). name -> board id
 board_ids: {}
+own_publish: schedule

@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Pinterest affiliate pipeline: products.csv -> text -> images -> landing pages -> drip schedule -> bulk CSV / API post."""
-import argparse, csv, hashlib, html, json, os, random, re, sqlite3, textwrap, time
+import argparse, csv, hashlib, html, json, os, random, re, shutil, sqlite3, textwrap, time
 from datetime import datetime, timedelta
 from pathlib import Path
 import requests, yaml
@@ -12,6 +12,9 @@ EXACT = {"on": False}
 
 def slugify(s):
     return re.sub(r"[^a-z0-9]+", "-", s.lower()).strip("-")[:60]
+
+
+NOW = "0000-00-00T00:00:00"   # marker: no publish date, Pinterest posts the pin as soon as the CSV is uploaded
 
 
 def db():
@@ -40,6 +43,19 @@ ANGLES = [
 
 STYLE = {"fashion", "jewelry", "beauty", "gifts", "party"}
 UTIL = {"organization", "fitness", "pets", "crochet", "planners", "weddings", "languages"}
+DESIGN = {"design"}
+ANGLES_DESIGN = [
+    ("{n}: Editable Vector Set", "Looking for {k}? {n} is a ready to use vector set for your next project. Save this pin and check the details."),
+    ("Licensed Vectors For Designers: {n}", "Need {k} for your designs? {n} comes with a commercial licence. Save it for later."),
+    ("Vector Pack: {n}", "A clean vector pack for {k}. {n} opens in Illustrator, Affinity and Inkscape. Pin it for your next project."),
+    ("Save This For Your Next Project", "Working on a logo, sticker or print? {n} has {k} shapes ready to edit. Tap to see the pack."),
+    ("Instant Download: {n}", "Download {n} right after purchase. Editable EPS files for {k}. Save this pin."),
+    ("Graphic Design Resource: {n}", "A handy resource for {k}: {n}. Scale it to any size without losing quality."),
+    ("Silhouette And Vector Ideas: {n}", "Ideas for {k}? {n} is a set of clean vectors you can recolor and reuse. Save for later."),
+    ("Craft And Print Ready: {n}", "Use {n} for stickers, prints, signs and more. {k} vectors with a commercial licence."),
+    ("Build Your Asset Library: {n}", "Add {k} to your asset library with {n}. Save this pin to find it again."),
+    ("Popular Vector Pack: {n}", "{n} is a popular pick for {k}. Open the pack to see what is inside."),
+]
 ANGLES_STYLE = [
     ("Style Inspo: {n}", "Looking for {k}? {n} is an easy way to add style. Save this pin for later."),
     ("Trending Now: {n}", "Searches for {k} keep climbing. See {n} and save it for your next look."),
@@ -72,7 +88,7 @@ def gen_text(p, n, dry, start=0):
     if dry or prov == "template":
         out = []
         cat = p.get("category", "")
-        angles = ANGLES_STYLE if cat in STYLE else ANGLES_UTIL if cat in UTIL else ANGLES
+        angles = ANGLES_DESIGN if cat in DESIGN else ANGLES_STYLE if cat in STYLE else ANGLES_UTIL if cat in UTIL else ANGLES
         for i in range(n):
             t, d = angles[(start + i) % len(angles)]
             k = kws[i % len(kws)] if kws else p.get("category", "your home")
@@ -119,7 +135,10 @@ def gen_base(p, v, tmp, dry):
     EXACT["on"] = False
     if p.get("image_url") and not dry:  # exact product photo wins
         try:
-            fetch(p["image_url"], tmp)
+            if os.path.exists(p["image_url"]):  # local file, e.g. a KDP book cover
+                shutil.copy(p["image_url"], tmp)
+            else:
+                fetch(p["image_url"], tmp)
             Image.open(tmp).verify()
             EXACT["on"] = True
             return
@@ -138,7 +157,7 @@ def gen_base(p, v, tmp, dry):
         kw0 = (p.get("keywords", "").split(";")[0] or p["name"]).strip()
         cat = p.get("category", "")
         cat_q = {"crochet": "crochet yarn", "planners": "planner notebook desk", "weddings": "wedding planning",
-                 "languages": "language learning books"}.get(cat, (cat or "home").replace("-", " "))
+                 "languages": "language learning books", "design": "graphic design desk"}.get(cat, (cat or "home").replace("-", " "))
         allp, q = [], ""
         for q in dict.fromkeys([p.get("photo_query") or p["name"], kw0, cat_q]):  # name -> keyword -> category
             r = requests.get("https://api.pexels.com/v1/search", headers={"Authorization": key},
@@ -314,8 +333,12 @@ small{{color:#666;display:block;margin-top:24px}}</style></head><body>
 
 def write_page(p, slug):
     pg = OUT / "pages" / f"{slug}.html"
-    disc = CFG["landing_disclosure"] if p.get("network", "amazon") == "amazon" else CFG.get(
-        "landing_disclosure_generic", "Disclosure: this page contains affiliate links. I may earn a commission at no extra cost to you.")
+    net = p.get("network", "amazon")
+    if net in ("own", "gumroad"):  # my own products: no affiliate wording
+        disc = CFG.get("landing_disclosure_own", "These are digital products made and sold by me.")
+    else:
+        disc = CFG["landing_disclosure"] if net == "amazon" else CFG.get(
+            "landing_disclosure_generic", "Disclosure: this page contains affiliate links. I may earn a commission at no extra cost to you.")
     img = f'<img src="../images/{slug}-v0.jpg" alt="{html.escape(p["name"])}">' if (OUT / "images" / f"{slug}-v0.jpg").exists() else ""
     pg.write_text(PAGE.format(name=html.escape(p["name"]), desc=html.escape(p.get("description", "")), url=html.escape(p["affiliate_url"]),
                               disc=html.escape(disc), img=img), encoding="utf-8")
@@ -402,7 +425,7 @@ def export(con):
             w = csv.writer(fh)
             w.writerow(["Title", "Media URL", "Pinterest board", "Thumbnail", "Description", "Link", "Publish date", "Keywords"])
             for _, t, d, l, b, m, s in chunk:
-                w.writerow([t, m, b, "", d, l, s, ""])
+                w.writerow([t, m, b, "", d, l, "" if s == NOW else s, ""])
         con.executemany("update pins set status='exported' where id=?", [(r[0],) for r in chunk])
         print("wrote", f, len(chunk), "pins")
     con.commit()
@@ -437,13 +460,15 @@ def cmd_run(a):
                 img.with_name(img.stem + "_base.png").unlink(missing_ok=True)
                 break
             link = f"{base}/pages/{slug}.html?v={i}" if base else p["affiliate_url"]
-            desc = f"{v['description'].strip()} {CFG['pin_disclosure']}"[:500]
+            own = p.get("network") in ("own", "gumroad")
+            desc = (v["description"].strip() if own else f"{v['description'].strip()} {CFG['pin_disclosure']}")[:500]   # own products: no "#ad affiliate" text
             title = v["title"][:100]
             board = p.get("board") or CFG["boards"].get(p.get("category", ""), CFG["default_board"])
             h = hashlib.sha1((link + title).encode()).hexdigest()
             try:
-                con.execute("insert into pins(slug,variant,title,descr,link,board,image,media_url,h) values(?,?,?,?,?,?,?,?,?)",
-                            (slug, i, title, desc, link, board, str(img), f"{media}/images/{img.name}", h))
+                now = p.get("network") in ("own", "gumroad") and CFG.get("own_publish", "now") == "now"   # my own products: post immediately
+                con.execute("insert into pins(slug,variant,title,descr,link,board,image,media_url,sched,h) values(?,?,?,?,?,?,?,?,?,?)",
+                            (slug, i, title, desc, link, board, str(img), f"{media}/images/{img.name}", NOW if now else None, h))
             except sqlite3.IntegrityError:
                 print("  dup skip", title)
         con.commit()
