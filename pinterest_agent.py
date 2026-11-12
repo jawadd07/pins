@@ -394,26 +394,8 @@ def write_site(prods):
 
 # ---------- schedule ----------
 def schedule(con):
-    rows = con.execute("select id,variant from pins where sched is null").fetchall()
-    random.shuffle(rows)
-    rows.sort(key=lambda r: r[1])  # spread variants of same product across days
-    s = CFG["schedule"]
-    start = datetime.fromisoformat(s["start_date"]) if s.get("start_date") else \
-        (datetime.now() + timedelta(days=1)).replace(hour=0, minute=0, second=0, microsecond=0)
-    h0, h1 = s["hours"]
-    day = 0
-    while rows:
-        d = start + timedelta(days=day)
-        quota = s["ramp"][min(day // 7, len(s["ramp"]) - 1)]
-        used = con.execute("select count(*) from pins where substr(sched,1,10)=?", (d.strftime("%Y-%m-%d"),)).fetchone()[0]
-        take = rows[:max(0, quota - used)]
-        rows = rows[len(take):]
-        mins = sorted(random.sample(range(h0 * 60, h1 * 60), len(take)))
-        for (pid, _), m in zip(take, mins):
-            off = s.get("audience_utc_offset", -5)  # hours in audience tz (US Eastern=-5); Pinterest reads CSV as UTC
-            t = (d.replace(hour=m // 60, minute=m % 60) - timedelta(hours=off)).isoformat(timespec="seconds")
-            con.execute("update pins set sched=? where id=?", (t, pid))
-        day += 1
+    """NO scheduling, ever: every pin gets the NOW marker (= empty Publish date) so Pinterest posts it as soon as the CSV is uploaded."""
+    con.execute("update pins set sched=? where sched is null", (NOW,))
     con.commit()
 
 
@@ -430,7 +412,7 @@ def export(con):
             w = csv.writer(fh)
             w.writerow(["Title", "Media URL", "Pinterest board", "Thumbnail", "Description", "Link", "Publish date", "Keywords"])
             for _, t, d, l, b, m, s in chunk:
-                w.writerow([t, m, b, "", d, l, "" if s == NOW else s, ""])
+                w.writerow([t, m, b, "", d, l, "", ""])
         con.executemany("update pins set status='exported' where id=?", [(r[0],) for r in chunk])
         print("wrote", f, len(chunk), "pins")
     con.commit()
@@ -442,8 +424,34 @@ def read_products():
         return [r for r in csv.DictReader(fh) if r.get("name") and r.get("affiliate_url")]
 
 
+def make_immediate(con):
+    """publish_mode: now  ->  pins not exported yet get no date, and the dates in CSV files that are still waiting for upload are removed"""
+    con.execute("update pins set sched=? where status='new'", (NOW,))
+    con.commit()
+    ex = Path("exports")
+    n = 0
+    if ex.exists():
+        for c in ex.glob("*.csv"):
+            with open(c, newline="", encoding="utf-8") as fh:
+                rows = list(csv.reader(fh))
+            if not rows or "Publish date" not in rows[0]:
+                continue
+            i = rows[0].index("Publish date")
+            changed = False
+            for r in rows[1:]:
+                if len(r) > i and r[i]:
+                    r[i] = ""; changed = True
+            if changed:
+                with open(c, "w", newline="", encoding="utf-8") as fh:
+                    csv.writer(fh).writerows(rows)
+                n += 1
+    if n:
+        print(f"publish_mode now: dates removed from {n} CSV file(s) waiting in exports")
+
+
 def cmd_run(a):
     con = db()
+    make_immediate(con)          # always: no publish dates, never
     base = CFG["landing_base_url"].rstrip("/")
     media = CFG["media_base_url"].rstrip("/")
     for p in read_products():
@@ -471,7 +479,7 @@ def cmd_run(a):
             board = p.get("board") or CFG["boards"].get(p.get("category", ""), CFG["default_board"])
             h = hashlib.sha1((link + title).encode()).hexdigest()
             try:
-                now = p.get("network") in ("own", "gumroad") and CFG.get("own_publish", "now") == "now"   # my own products: post immediately
+                now = True   # now = no publish date: Pinterest posts the pin as soon as the CSV is uploaded
                 con.execute("insert into pins(slug,variant,title,descr,link,board,image,media_url,sched,h) values(?,?,?,?,?,?,?,?,?,?)",
                             (slug, i, title, desc, link, board, str(img), f"{media}/images/{img.name}", NOW if now else None, h))
             except sqlite3.IntegrityError:
@@ -505,15 +513,10 @@ def cmd_post_due(a):
 
 
 def cmd_reschedule(a):
-    """re-time pins that are not posted yet (use with new ramp). Old scheduled pins on Pinterest must be deleted by hand first."""
+    """no more scheduling. Re-exports pins that were exported but not uploaded yet, without dates."""
     con = db()
-    q = "update pins set sched=NULL, status='new' where status in ('new','exported')"
-    if a.after:
-        con.execute(q + " and sched>=?", (a.after,))
-    else:
-        con.execute(q)
+    con.execute("update pins set sched=?, status='new' where status='exported'", (NOW,))
     con.commit()
-    schedule(con)
     export(con)
 
 
