@@ -394,8 +394,26 @@ def write_site(prods):
 
 # ---------- schedule ----------
 def schedule(con):
-    """NO scheduling, ever: every pin gets the NOW marker (= empty Publish date) so Pinterest posts it as soon as the CSV is uploaded."""
-    con.execute("update pins set sched=? where sched is null", (NOW,))
+    rows = con.execute("select id,variant from pins where sched is null").fetchall()
+    random.shuffle(rows)
+    rows.sort(key=lambda r: r[1])  # spread variants of same product across days
+    s = CFG["schedule"]
+    start = datetime.fromisoformat(s["start_date"]) if s.get("start_date") else \
+        (datetime.now() + timedelta(days=1)).replace(hour=0, minute=0, second=0, microsecond=0)
+    h0, h1 = s["hours"]
+    day = 0
+    while rows:
+        d = start + timedelta(days=day)
+        quota = s["ramp"][min(day // 7, len(s["ramp"]) - 1)]
+        used = con.execute("select count(*) from pins where substr(sched,1,10)=?", (d.strftime("%Y-%m-%d"),)).fetchone()[0]
+        take = rows[:max(0, quota - used)]
+        rows = rows[len(take):]
+        mins = sorted(random.sample(range(h0 * 60, h1 * 60), len(take)))
+        for (pid, _), m in zip(take, mins):
+            off = s.get("audience_utc_offset", -5)  # hours in audience tz (US Eastern=-5); Pinterest reads CSV as UTC
+            t = (d.replace(hour=m // 60, minute=m % 60) - timedelta(hours=off)).isoformat(timespec="seconds")
+            con.execute("update pins set sched=? where id=?", (t, pid))
+        day += 1
     con.commit()
 
 
@@ -412,7 +430,7 @@ def export(con):
             w = csv.writer(fh)
             w.writerow(["Title", "Media URL", "Pinterest board", "Thumbnail", "Description", "Link", "Publish date", "Keywords"])
             for _, t, d, l, b, m, s in chunk:
-                w.writerow([t, m, b, "", d, l, "", ""])
+                w.writerow([t, m, b, "", d, l, "" if s == NOW else s, ""])
         con.executemany("update pins set status='exported' where id=?", [(r[0],) for r in chunk])
         print("wrote", f, len(chunk), "pins")
     con.commit()
@@ -421,7 +439,21 @@ def export(con):
 # ---------- commands ----------
 def read_products():
     with open(CFG["products_file"], newline="", encoding="utf-8") as fh:
-        return [r for r in csv.DictReader(fh) if r.get("name") and r.get("affiliate_url")]
+        rows = [r for r in csv.DictReader(fh) if r.get("name") and r.get("affiliate_url")]
+    skip_net = [n.lower() for n in CFG.get("skip_networks", ["amazon"])]   # default: Amazon off, Digistore24 + own products only
+    rows = [r for r in rows if (r.get("network") or "amazon").lower() not in skip_net]
+    if not CFG.get("skip_search_links", True):
+        return rows
+    ok, bad = [], []
+    for r in rows:      # an Amazon search link shows MANY products, not one -> no pin until an exact /dp/ link is set
+        (bad if re.search(r"amazon\.[a-z.]+/s\?", r["affiliate_url"]) else ok).append(r)
+    if bad:
+        with open("NEED_LINKS.txt", "w", encoding="utf-8") as f:
+            f.write("Ye products ke liye pin NAHI bane: exact Amazon product link chahiye (search link nahi).\n"
+                    "links.txt mein 'PASTE LINK HERE' ki jagah product ka link (ya 10-char ASIN) daalo, phir auto.bat.\n\n")
+            f.writelines(r["name"] + "\n" for r in bad)
+        print(f"\n!!! {len(bad)} Amazon products SKIP (search link hai, exact product link nahi). List: NEED_LINKS.txt\n")
+    return ok
 
 
 def make_immediate(con):
@@ -451,7 +483,8 @@ def make_immediate(con):
 
 def cmd_run(a):
     con = db()
-    make_immediate(con)          # always: no publish dates, never
+    if CFG.get("publish_mode", "now") == "now":
+        make_immediate(con)
     base = CFG["landing_base_url"].rstrip("/")
     media = CFG["media_base_url"].rstrip("/")
     for p in read_products():
@@ -479,7 +512,7 @@ def cmd_run(a):
             board = p.get("board") or CFG["boards"].get(p.get("category", ""), CFG["default_board"])
             h = hashlib.sha1((link + title).encode()).hexdigest()
             try:
-                now = True   # now = no publish date: Pinterest posts the pin as soon as the CSV is uploaded
+                now = CFG.get("publish_mode", "now") == "now" or (p.get("network") in ("own", "gumroad") and CFG.get("own_publish", "now") == "now")   # now = no publish date: Pinterest posts the pin as soon as the CSV is uploaded
                 con.execute("insert into pins(slug,variant,title,descr,link,board,image,media_url,sched,h) values(?,?,?,?,?,?,?,?,?,?)",
                             (slug, i, title, desc, link, board, str(img), f"{media}/images/{img.name}", NOW if now else None, h))
             except sqlite3.IntegrityError:
@@ -513,10 +546,15 @@ def cmd_post_due(a):
 
 
 def cmd_reschedule(a):
-    """no more scheduling. Re-exports pins that were exported but not uploaded yet, without dates."""
+    """re-time pins that are not posted yet (use with new ramp). Old scheduled pins on Pinterest must be deleted by hand first."""
     con = db()
-    con.execute("update pins set sched=?, status='new' where status='exported'", (NOW,))
+    q = "update pins set sched=NULL, status='new' where status in ('new','exported')"
+    if a.after:
+        con.execute(q + " and sched>=?", (a.after,))
+    else:
+        con.execute(q)
     con.commit()
+    schedule(con)
     export(con)
 
 

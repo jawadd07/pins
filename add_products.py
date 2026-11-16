@@ -292,7 +292,7 @@ if __name__ == "__main__":
         if not os.path.exists(a.imp) or not open(a.imp, encoding="utf-8").read().strip():
             print("picks.txt empty, nothing to import")
             raise SystemExit
-        new = import_picks(a.imp, rows, tag, cfg, a.max)
+        new = import_picks(a.imp, rows, tag, cfg, max(a.max, 30))   # was 5: extra lines were silently dropped
         if new:
             shutil.copy(CSV, CSV + ".bak")
             with open(CSV, "a", newline="", encoding="utf-8") as f:

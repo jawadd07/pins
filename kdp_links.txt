@@ -1,0 +1,2 @@
+# After you publish a book on KDP, add one line:  book-folder-name | amazon link of the book
+# example:  five-minute-gratitude-journal | https://www.amazon.com/dp/XXXXXXXXXX

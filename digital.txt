@@ -1,0 +1,2 @@
+# category | product name | digistore24 product id | (network optional)
+# IDs below come from the vendor's public affiliate pages (80% commission, $17.99). Check each in your Digistore24 Marketplace (search the id) before relying on it.

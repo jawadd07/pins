@@ -1,6 +1,15 @@
 @echo off
 cd /d "%~dp0"
 if exist keys.bat call keys.bat
+rem FIRST TIME on a fresh folder: connect to the existing GitHub repo and restore old pages (so old pins keep working)
+if not exist .git (
+  git init
+  git branch -M main
+  git remote add origin https://github.com/jawadd07/pins.git
+  git fetch origin main
+  git reset origin/main
+  git checkout -- docs
+)
 if not exist .venv\Scripts\activate.bat python -m venv .venv
 call .venv\Scripts\activate.bat
 pip install -q -r requirements.txt

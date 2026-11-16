@@ -1,0 +1,20 @@
+PINTEREST AGENT (poora folder, nayi copy)
+
+0. PEHLE: Recycle Bin kholo. Agar purana pinterest-agent folder wahan hai -> right-click -> Restore. Usme tumhari state.db aur keys.bat bhi thi.
+   (Restore kar sako to ye zip mat use karo, sirf pinterest_update2 ki files uspe daal do.)
+   Warna ye zip: Extract All -> folder pinterest_agent kahin bhi rakho (jaise Downloads).
+
+1. keys.bat Notepad mein kholo, = ke baad apni keys likho (EK BAAR), save:
+   PEXELS_API_KEY=  (pexels.com/api, free)
+   DS24_API_KEY=    (Digistore24 > Settings > Account access > API keys, READ ONLY)  [DS24 wali baad mein bhi ho sakti hai]
+
+2. auto.bat double-click. Ye khud karta hai:
+   Digistore24 se naye products dhoondhna -> pins banana -> GitHub pe pages/images push -> exports\ mein Pinterest CSV.
+   Pehli baar GitHub login/popup aa sakta hai (jawadd07), ek dafa allow karo.
+   Pehli baar ye purane GitHub pages wapas khud lata hai (git fetch), purane pin links chalte rahenge.
+
+3. exports\ ki nayi CSV Pinterest pe upload karo (Create -> Bulk create pins).
+
+Amazon abhi band hai (config.yaml: skip_networks: [amazon]).
+Zaroorat padne par: digital.txt mein ek line:  languages | Product ka naam | digistore24-id
+Purane pins ka record (state.db) delete ho gaya to wohi products naye pins dobara bana sakte hain: Pinterest mein duplicate na ho, upload se pehle CSV dekh lo.

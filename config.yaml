@@ -20,7 +20,6 @@ landing_disclosure: "Disclosure: this page contains affiliate links. I may earn 
 
 default_board: Home Decor Ideas
 boards:                              # category -> exact Pinterest board name
-  design: Vector Art and Design Resources
   boho: Boho Decor Ideas
   home-decor: Home Decor Ideas
   kitchen: Kitchen Gadgets
@@ -45,4 +44,11 @@ schedule:
 
 # only for post-due (after API approval). name -> board id
 board_ids: {}
-own_publish: schedule
+
+skip_search_links: true              # Amazon search links (/s?k=) = many products on click -> such products get NO pins until exact /dp/ link is set
+
+skip_networks: [amazon]              # Amazon band. Wapas chalane ke liye: skip_networks: []
+ds_auto:                             # Digistore24 auto-find (ds_fetch.py)
+  per_run: 5                         # har auto.bat mein kitne NAYE products
+  min_stars: 2
+  max_cancel_rate: 25

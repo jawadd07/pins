@@ -1,4 +1,4 @@
-# One line per product:  product name | Amazon product link (or 10-char ASIN)
+# One line per product:  product name | Amazon product link (or 10-char ASIN) | exact photo link (optional)
 # Get link: open the exact product on amazon.com -> copy page URL. Tag is added for you.
 # Lines with PASTE are skipped.
 Rattan Accent Chair | PASTE LINK HERE
@@ -11,63 +11,18 @@ Acacia Wood Serving Board | PASTE LINK HERE
 Cabbage Shredder and Kitchen Slicer | PASTE LINK HERE
 Weighted Sleep Blanket | PASTE LINK HERE
 Aromatherapy Essential Oil Diffuser | PASTE LINK HERE
+# Photo example:  Rattan Accent Chair | https://www.amazon.com/dp/B0XXXXXXXX | https://m.media-amazon.com/images/I/xxxx.jpg
+Owala Insulated Water Bottle 32 Oz | PASTE LINK HERE
+Owala Sway Water Bottle 30 Oz | PASTE LINK HERE
+Owala Smoothsip Coffee Tumbler | PASTE LINK HERE
+Stanley Quencher Insulated Tumbler | PASTE LINK HERE
+Bella Slim Toaster | PASTE LINK HERE
+Etekcity Digital Kitchen Scale | PASTE LINK HERE
+AI and ChatGPT for Language Practice | PASTE LINK HERE
+The Beginners Blueprint to Language Learning | PASTE LINK HERE
+Pronunciation Mastery Speak Clearly and Confidently | PASTE LINK HERE
+Macrame Wall Hanging | PASTE LINK HERE
 Rattan Pendant Light | PASTE LINK HERE
 Boho Throw Pillow Covers | PASTE LINK HERE
 Art Deco Table Lamp | PASTE LINK HERE
 Arched Floor Mirror | PASTE LINK HERE
-Macrame Wall Hanging | PASTE LINK HERE
-Glass Food Storage Containers | PASTE LINK HERE
-Cutting Board Set | PASTE LINK HERE
-Silk Sleep Mask | PASTE LINK HERE
-Sunrise Alarm Clock | PASTE LINK HERE
-Utility Shirt Women | PASTE LINK HERE
-Lace Press On Nails | PASTE LINK HERE
-Chunky Gold Hoop Earrings | PASTE LINK HERE
-Snail Mail Stationery Set | PASTE LINK HERE
-Closet Organizer | PASTE LINK HERE
-Graph 1 Vector Pack Vol 1 | PASTE LINK HERE
-Graph 1 Vector Pack Vol 2 | PASTE LINK HERE
-Vectors Vector Pack Vol 1 | PASTE LINK HERE
-Vectors Vector Pack Vol 2 | PASTE LINK HERE
-Vectors Vector Pack Vol 3 | PASTE LINK HERE
-Vectors Vector Pack Vol 4 | PASTE LINK HERE
-Day 3 Vector Pack | PASTE LINK HERE
-Resistance Bands Set | PASTE LINK HERE
-Orthopedic Dog Bed | PASTE LINK HERE
-Masquerade Mask Set | PASTE LINK HERE
-Brown Linen Shirt | PASTE LINK HERE
-Coffin Press On Nails | PASTE LINK HERE
-Animal Silhouettes Vector Pack Vol 1 | PASTE LINK HERE
-Animal Silhouettes Vector Pack Vol 2 | PASTE LINK HERE
-Animal Silhouettes Vector Pack Vol 3 | PASTE LINK HERE
-Animal Silhouettes Vector Pack Vol 4 | PASTE LINK HERE
-Animal Sillihoutes Vector Pack Vol 1 | PASTE LINK HERE
-Animal Sillihoutes Vector Pack Vol 2 | PASTE LINK HERE
-Animal Sillihoutes Vector Pack Vol 3 | PASTE LINK HERE
-Animal Sillihoutes Vector Pack Vol 4 | PASTE LINK HERE
-Brooch Pin Set | PASTE LINK HERE
-Wax Seal Kit | PASTE LINK HERE
-Drawer Organizer Set | PASTE LINK HERE
-Yoga Mat Thick | PASTE LINK HERE
-Cat Tree Tower | PASTE LINK HERE
-Balloon Garland Kit | PASTE LINK HERE
-Baggy Suit Set Women | PASTE LINK HERE
-Air Fryer Liners | PASTE LINK HERE
-Jelly Blush | PASTE LINK HERE
-Modern Wall Art Set | PASTE LINK HERE
-Layered Pearl Necklace | PASTE LINK HERE
-Weighted Blanket | PASTE LINK HERE
-Penpal Stationery Set | PASTE LINK HERE
-Under Bed Storage | PASTE LINK HERE
-Adjustable Dumbbells | PASTE LINK HERE
-Automatic Pet Feeder | PASTE LINK HERE
-Ice Blue Party Decorations | PASTE LINK HERE
-Woven Wall Baskets | PASTE LINK HERE
-Chunky Belt | PASTE LINK HERE
-Knife Block Set | PASTE LINK HERE
-Glossy Lip Oil | PASTE LINK HERE
-Ceramic Vase Set | PASTE LINK HERE
-Statement Ring Set | PASTE LINK HERE
-Essential Oil Diffuser | PASTE LINK HERE
-Journal Notebook Set | PASTE LINK HERE
-Shoe Rack Organizer | PASTE LINK HERE

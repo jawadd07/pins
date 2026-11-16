@@ -2,3 +2,5 @@ requests
 pyyaml
 pillow
 anthropic
+reportlab
+pymupdf
